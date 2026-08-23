@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#050505">
+<title>Jack's Crypto Board</title>
+<style>
+:root{--bg:#050505;--card:#111;--card2:#151515;--muted:#8c8c8c;--line:#282828;--green:#35e75f;--red:#ff5151;--white:#f7f7f7}
+*{box-sizing:border-box}html,body{margin:0;background:var(--bg);color:var(--white);font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","Helvetica Neue",Arial,sans-serif;min-height:100%;overflow:hidden}
+body{padding:max(12px,env(safe-area-inset-top)) max(16px,env(safe-area-inset-right)) max(12px,env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left))}
+.header{height:13vh;min-height:84px;display:flex;align-items:center;justify-content:space-between}
+.title{font-size:clamp(28px,5vw,56px);font-weight:900;letter-spacing:-1.8px}
+.sub{font-size:clamp(11px,1.7vw,17px);color:var(--muted);margin-top:4px}
+.live{text-align:right;font-size:clamp(11px,1.6vw,17px);color:var(--muted)}
+.live b{color:var(--green)}
+.grid{height:78vh;display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;gap:14px}
+.card{background:linear-gradient(145deg,var(--card2),var(--card));border:1px solid var(--line);border-radius:22px;padding:clamp(15px,2.4vw,30px);display:flex;flex-direction:column;justify-content:space-between;min-width:0;overflow:hidden}
+.top{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}.name{font-size:clamp(17px,3vw,34px);font-weight:850}.ticker{font-size:clamp(10px,1.5vw,15px);color:var(--muted);margin-top:2px}
+.change{font-size:clamp(15px,2.5vw,29px);font-weight:850;white-space:nowrap}.green{color:var(--green)}.red{color:var(--red)}
+.price{font-size:clamp(38px,7.2vw,86px);font-weight:900;letter-spacing:-2.5px;line-height:1.02;margin:8px 0}
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:7px 18px;color:var(--muted);font-size:clamp(10px,1.45vw,16px)}
+.stat b{display:block;color:var(--white);font-size:clamp(13px,1.9vw,21px);margin-top:2px}
+.pnl{font-weight:850}.spark{width:100%;height:42px;margin-top:8px}
+.footer{height:7vh;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:clamp(10px,1.35vw,14px);text-align:center}
+@media(max-width:650px){.grid{gap:8px}.card{padding:13px;border-radius:16px}.stats{gap:4px 8px}.spark{height:32px}}
+</style>
+</head>
+<body>
+<header class="header">
+  <div><div class="title">CRYPTO BOARD</div><div class="sub">Your bag • live market view</div></div>
+  <div class="live" id="status">Connecting…</div>
+</header>
+<main class="grid" id="grid"></main>
+<footer class="footer">Auto-refresh 30s • Market data is live; portfolio cost basis is your recorded average buy price.</footer>
+
+<script>
+const coins=[
+ {id:"official-trump",name:"TRUMP",ticker:"TRUMP",symbol:"TRUMPUSDT",qty:9.907,avg:2.46,source:"binance"},
+ {id:"solana",name:"Solana",ticker:"SOL",symbol:"SOLUSDT",qty:0.28682,avg:93.33,source:"binance"},
+ {id:"bitcoin",name:"Bitcoin",ticker:"BTC",symbol:"BTCUSDT",qty:0.00012847,avg:77138.63,source:"binance"},
+ {id:"popcat",name:"Popcat",ticker:"POPCAT",symbol:"POPCATUSDT",qty:224.63,avg:0.057339,source:"coingecko"}
+];
+
+function fmt(v){
+ if(v==null||!isFinite(v))return "—";
+ if(v>=1000)return "$"+v.toLocaleString(undefined,{maximumFractionDigits:0});
+ if(v>=1)return "$"+v.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
+ if(v>=0.1)return "$"+v.toFixed(4);
+ return "$"+v.toFixed(6);
+}
+function card(c){
+ const invested=c.qty*c.avg;
+ return `<section class="card" id="c-${c.id}">
+ <div class="top"><div><div class="name">${c.name}</div><div class="ticker">${c.ticker}</div></div><div class="change">—</div></div>
+ <div class="price">—</div>
+ <div>
+  <div class="stats">
+   <div class="stat">YOU BOUGHT FOR<b>${fmt(invested)}</b></div>
+   <div class="stat">NOW WORTH<b class="now">—</b></div>
+   <div class="stat">YOUR P/L<b class="pnl">—</b></div>
+   <div class="stat">AVG BUY<b>${fmt(c.avg)}</b></div>
+  </div>
+  <svg class="spark" viewBox="0 0 300 42" preserveAspectRatio="none"></svg>
+ </div>
+ </section>`;
+}
+document.getElementById("grid").innerHTML=coins.map(card).join("");
+
+function setData(c,price,change,spark){
+ const el=document.getElementById("c-"+c.id);
+ const value=price*c.qty, invested=price?c.qty*c.avg:0, pnl=value-invested, pnlPct=c.avg?(price/c.avg-1)*100:0;
+ const cls=change>=0?"green":"red";
+ el.querySelector(".change").className="change "+cls;
+ el.querySelector(".change").textContent=(change>=0?"+":"")+change.toFixed(2)+"%";
+ el.querySelector(".price").textContent=fmt(price);
+ el.querySelector(".now").textContent=fmt(value);
+ el.querySelector(".pnl").className="pnl "+(pnl>=0?"green":"red");
+ el.querySelector(".pnl").textContent=(pnl>=0?"+":"")+fmt(pnl)+" ("+(pnlPct>=0?"+":"")+pnlPct.toFixed(2)+"%)";
+ draw(el.querySelector(".spark"),spark,change>=0);
+}
+function draw(svg,arr,up){
+ if(!arr||arr.length<2)return;
+ const mn=Math.min(...arr),mx=Math.max(...arr),d=mx-mn||1;
+ const pts=arr.map((v,i)=>`${i/(arr.length-1)*300},${40-(v-mn)/d*36}`).join(" ");
+ svg.innerHTML=`<polyline points="${pts}" fill="none" stroke="${up?'#35e75f':'#ff5151'}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>`;
+}
+async function binance(c){
+ const r=await fetch(`https://data-api.binance.vision/api/v3/ticker/24hr?symbol=${c.symbol}`,{cache:"no-store"});
+ if(!r.ok)throw Error("Binance "+r.status);
+ const x=await r.json();
+ return {price:+x.lastPrice,change:+x.priceChangePercent,spark:[]};
+}
+async function popcat(){
+ const url="https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids=popcat&price_change_percentage=24h&sparkline=true";
+ const r=await fetch(url,{cache:"no-store"});
+ if(!r.ok)throw Error("CoinGecko "+r.status);
+ const x=(await r.json())[0];
+ return {price:x.current_price,change:x.price_change_percentage_24h||0,spark:x.sparkline_in_7d?.price||[]};
+}
+async function update(){
+ let ok=0;
+ await Promise.all(coins.map(async c=>{
+  try{
+   const d=c.source==="binance"?await binance(c):await popcat();
+   setData(c,d.price,d.change,d.spark);ok++;
+  }catch(e){console.log(c.ticker,e)}
+ }));
+ const now=new Date();
+ document.getElementById("status").innerHTML=ok===4?`<b>● LIVE</b><br>${now.toLocaleTimeString([], {hour:"2-digit",minute:"2-digit",second:"2-digit"})}`:`<b style="color:#ff5151">● ${ok}/4 LIVE</b><br>retrying…`;
+}
+update();setInterval(update,30000);
+</script>
+</body>
+</html>
