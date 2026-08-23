@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#050505">
+<title>Crypto Board</title>
+<style>
+:root{--bg:#050505;--panel:#111;--muted:#8b8b8b;--green:#39e75f;--red:#ff4d4d;--line:#242424}
+*{box-sizing:border-box}html,body{margin:0;background:var(--bg);color:#fff;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display",Arial,sans-serif;min-height:100%;overflow:hidden}
+body{padding:env(safe-area-inset-top) 18px env(safe-area-inset-bottom)}
+header{height:15vh;min-height:90px;display:flex;align-items:center;justify-content:space-between;gap:16px}
+h1{font-size:clamp(28px,5vw,54px);margin:0;font-weight:800;letter-spacing:-1px}
+#status{font-size:clamp(12px,1.8vw,18px);color:var(--muted);text-align:right}
+#status b{color:#fff}
+.grid{height:76vh;display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;gap:14px}
+.card{background:linear-gradient(145deg,#151515,#0d0d0d);border:1px solid var(--line);border-radius:22px;padding:clamp(16px,2.5vw,32px);display:flex;flex-direction:column;justify-content:space-between;min-width:0}
+.top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+.name{font-size:clamp(18px,3vw,34px);font-weight:800}
+.ticker{font-size:clamp(11px,1.6vw,16px);color:var(--muted);margin-top:3px}
+.change{font-size:clamp(15px,2.5vw,30px);font-weight:800;white-space:nowrap}
+.price{font-size:clamp(34px,7vw,82px);font-weight:850;letter-spacing:-2px;line-height:1;margin-top:8px}
+.meta{display:flex;justify-content:space-between;align-items:end;gap:12px;color:var(--muted);font-size:clamp(11px,1.5vw,16px)}
+.spark{width:42%;height:42px}
+.green{color:var(--green)}.red{color:var(--red)}
+footer{height:9vh;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:clamp(11px,1.5vw,16px);text-align:center}
+button{background:#1b1b1b;border:1px solid #333;color:#fff;border-radius:12px;padding:8px 12px;font-weight:700}
+@media(max-width:600px){.grid{gap:8px}.card{border-radius:16px;padding:14px}.meta{display:block}.meta span{display:block;margin-top:5px}.spark{width:55%}}
+</style>
+</head>
+<body>
+<header>
+  <h1>CRYPTO BOARD</h1>
+  <div id="status">Connecting…</div>
+</header>
+<main class="grid" id="grid"></main>
+<footer>Live market monitor • auto-refreshes every 30 seconds</footer>
+<script>
+const coins=[
+ {id:"official-trump",name:"TRUMP",ticker:"TRUMP",qty:9.907,avg:2.46},
+ {id:"solana",name:"Solana",ticker:"SOL",qty:0.28682,avg:93.33},
+ {id:"bitcoin",name:"Bitcoin",ticker:"BTC",qty:0.00012847,avg:77138.63},
+ {id:"popcat",name:"Popcat",ticker:"POPCAT",qty:224.63,avg:0.057339}
+];
+const grid=document.getElementById("grid"), statusEl=document.getElementById("status");
+function money(v){if(v>=1000)return "$"+v.toLocaleString(undefined,{maximumFractionDigits:0});if(v>=1)return "$"+v.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});return "$"+v.toFixed(5)}
+function card(c){
+ return `<section class="card" id="c-${c.id}">
+  <div class="top"><div><div class="name">${c.name}</div><div class="ticker">${c.ticker}</div></div><div class="change">—</div></div>
+  <div class="price">—</div>
+  <div class="meta"><span>Position: —</span><span>Avg: $${c.avg}</span><svg class="spark" viewBox="0 0 160 42" preserveAspectRatio="none"></svg></div>
+ </section>`
+}
+grid.innerHTML=coins.map(card).join("");
+function spark(svg, arr, up){
+ if(!arr||arr.length<2)return;
+ let mn=Math.min(...arr),mx=Math.max(...arr),d=mx-mn||1;
+ let pts=arr.map((v,i)=>`${i/(arr.length-1)*160},${40-(v-mn)/d*36}`).join(" ");
+ svg.innerHTML=`<polyline points="${pts}" fill="none" stroke="${up?'#39e75f':'#ff4d4d'}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>`;
+}
+async function update(){
+ try{
+  const ids=coins.map(c=>c.id).join(",");
+  const target=`https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids=${ids}&price_change_percentage=24h&sparkline=true`;
+  const urls=[
+    `https://api.allorigins.win/raw?url=${encodeURIComponent(target)}`,
+    `https://corsproxy.io/?url=${encodeURIComponent(target)}`
+  ];
+  let data=null, lastErr=null;
+  for(const u of urls){
+    try{
+      const r=await fetch(u,{cache:"no-store"});
+      if(!r.ok) throw new Error("HTTP "+r.status);
+      data=await r.json();
+      if(Array.isArray(data)) break;
+    }catch(e){lastErr=e}
+  }
+  if(!Array.isArray(data)) throw lastErr||new Error("No data");
+  const map=Object.fromEntries(data.map(x=>[x.id,x]));
+  coins.forEach(c=>{
+    const x=map[c.id], el=document.getElementById("c-"+c.id); if(!x||!el)return;
+    const ch=x.price_change_percentage_24h||0, cls=ch>=0?"green":"red";
+    el.querySelector(".change").className="change "+cls;
+    el.querySelector(".change").textContent=(ch>=0?"+":"")+ch.toFixed(2)+"%";
+    el.querySelector(".price").textContent=money(x.current_price);
+    el.querySelector(".meta span:first-child").textContent="Position: "+money(x.current_price*c.qty);
+    el.querySelector(".meta span:nth-child(2)").textContent="Avg: "+money(c.avg);
+    spark(el.querySelector(".spark"),x.sparkline_in_7d?.price,ch>=0);
+  });
+  const now=new Date();statusEl.innerHTML=`<b>LIVE</b> · updated ${now.toLocaleTimeString([], {hour:"2-digit",minute:"2-digit",second:"2-digit"})}`;
+ }catch(e){statusEl.innerHTML=`<b style="color:#ff4d4d">OFFLINE</b> · retrying…`}
+}
+update();setInterval(update,30000);
+</script>
+</body></html>
