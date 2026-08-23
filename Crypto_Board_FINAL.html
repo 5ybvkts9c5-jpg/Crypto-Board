@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#050505">
+<title>Jack's Crypto Board</title>
+<style>
+:root{--bg:#05080a;--card:#0d1317;--card2:#10181d;--muted:#9aa5ab;--line:#273138;--green:#35e75f;--red:#ff5151;--white:#f5f7f8}
+*{box-sizing:border-box}
+html,body{margin:0;width:100%;height:100%;background:var(--bg);color:var(--white);font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","Helvetica Neue",Arial,sans-serif;overflow:hidden}
+body{padding:10px 16px 8px;display:flex;flex-direction:column;gap:7px}
+.header{flex:0 0 62px;min-height:0;display:flex;align-items:center;justify-content:space-between;padding:0 2px}
+.title{font-size:32px;line-height:1;font-weight:900;letter-spacing:-1.6px}
+.sub{font-size:13px;color:var(--muted);margin-top:5px}
+.live{text-align:right;font-size:13px;line-height:1.35;color:var(--muted);white-space:nowrap}.live b{color:var(--green)}
+.grid{flex:1 1 auto;min-height:0;display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;gap:8px}
+.card{background:linear-gradient(145deg,var(--card2),var(--card));border:1px solid var(--line);border-radius:17px;padding:13px 15px;min-width:0;min-height:0;overflow:hidden;display:grid;grid-template-rows:auto 1fr auto;gap:4px}
+.top{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}.name{font-size:22px;line-height:1.05;font-weight:900}.ticker{font-size:11px;color:var(--muted);margin-top:3px}.change{font-size:16px;font-weight:850;white-space:nowrap}
+.middle{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:10px;align-items:center;min-height:0}
+.price{font-size:40px;font-weight:900;letter-spacing:-2px;line-height:.95;white-space:nowrap;margin:0 0 7px}.spark{width:100%;height:38px;display:block}
+.returnBox{text-align:right;min-width:0}.returnLabel{font-size:12px;color:var(--muted);font-weight:800;margin-bottom:3px}.returnPct{font-size:21px;font-weight:900;white-space:nowrap;letter-spacing:-.7px}.pnlLine{font-size:12px;color:var(--muted);margin-top:4px;white-space:nowrap}.pnlLine b{font-size:14px}
+.stats{border-top:1px solid #202a30;padding-top:8px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px;color:var(--muted);font-size:10px}.stat b{display:block;color:var(--white);font-size:13px;margin-top:2px;white-space:nowrap}.stat:nth-child(2){text-align:center}.stat:nth-child(3){text-align:right}
+.footer{flex:0 0 24px;min-height:0;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:10px;text-align:center;white-space:nowrap;overflow:hidden}
+.green{color:var(--green)}.red{color:var(--red)}
+@media(max-width:800px){body{padding:7px 9px 5px;gap:5px}.header{flex-basis:54px}.title{font-size:27px}.sub,.live{font-size:11px}.grid{gap:6px}.card{padding:10px 11px;border-radius:14px}.name{font-size:18px}.ticker{font-size:9px}.change{font-size:13px}.price{font-size:32px}.returnLabel{font-size:10px}.returnPct{font-size:17px}.pnlLine{font-size:10px}.pnlLine b{font-size:11px}.stats{font-size:8px;padding-top:6px}.stat b{font-size:11px}.spark{height:28px}.footer{font-size:8px}}
+@media(max-height:650px){.header{flex-basis:48px}.title{font-size:25px}.card{padding:8px 10px}.price{font-size:29px}.spark{height:23px}.stats{padding-top:5px}.footer{display:none}}
+</style>
+</head>
+<body>
+<header class="header">
+  <div><div class="title">CRYPTO BOARD</div><div class="sub">Your bag • live market view</div></div>
+  <div class="live" id="status">Connecting…</div>
+</header>
+<main class="grid" id="grid"></main>
+<footer class="footer">Auto-refresh 15s • YOUR RETURN = your P/L from average buy • 24H = coin market move • Last good price stays on temporary errors.</footer>
+
+<script>
+const coins=[
+ {id:"official-trump",name:"TRUMP",ticker:"TRUMP",symbol:"TRUMPUSDT",qty:9.907,avg:2.46,source:"binance"},
+ {id:"solana",name:"Solana",ticker:"SOL",symbol:"SOLUSDT",qty:0.28682,avg:93.33,source:"binance"},
+ {id:"bitcoin",name:"Bitcoin",ticker:"BTC",symbol:"BTCUSDT",qty:0.00012847,avg:77138.63,source:"binance"},
+ {id:"popcat",name:"Popcat",ticker:"POPCAT",symbol:"POPCATUSDT",qty:224.63,avg:0.057339,source:"coingecko"}
+];
+
+function fmt(v){
+ if(v==null||!isFinite(v))return "—";
+ if(v>=1000)return "$"+v.toLocaleString(undefined,{maximumFractionDigits:0});
+ if(v>=1)return "$"+v.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
+ if(v>=0.1)return "$"+v.toFixed(4);
+ return "$"+v.toFixed(6);
+}
+function card(c){
+ const invested=c.qty*c.avg;
+ return `<section class="card" id="c-${c.id}">
+ <div class="top"><div><div class="name">${c.name}</div><div class="ticker">${c.ticker}</div></div><div class="change">24H —</div></div>
+ <div class="middle">
+  <div><div class="price">—</div><svg class="spark" viewBox="0 0 300 42" preserveAspectRatio="none"></svg></div>
+  <div class="returnBox"><div class="returnLabel">YOUR RETURN</div><div class="returnPct">—</div><div class="pnlLine">P/L <b class="pnl">—</b></div></div>
+ </div>
+ <div class="stats">
+  <div class="stat">YOU PUT IN<b>${fmt(invested)}</b></div>
+  <div class="stat">WORTH NOW<b class="now">—</b></div>
+  <div class="stat">AVG BUY<b>${fmt(c.avg)}</b></div>
+ </div>
+ </section>`;
+}
+document.getElementById("grid").innerHTML=coins.map(card).join("");
+
+function setData(c,price,change,spark){
+ const el=document.getElementById("c-"+c.id);
+ const invested=c.qty*c.avg;
+ const value=price*c.qty;
+ const pnl=value-invested;
+ const pnlPct=c.avg?(price/c.avg-1)*100:0;
+ const marketCls=change>=0?"green":"red";
+ const pnlCls=pnl>=0?"green":"red";
+
+ el.querySelector(".change").className="change "+marketCls;
+ el.querySelector(".change").textContent="24H "+(change>=0?"+":"")+change.toFixed(2)+"%";
+ el.querySelector(".price").textContent=fmt(price);
+
+ const pct=el.querySelector(".returnPct");
+ pct.className="personalPct "+pnlCls;
+ pct.textContent=(pnlPct>=0?"+":"")+pnlPct.toFixed(2)+"%";
+
+ el.querySelector(".now").textContent=fmt(value);
+ const p=el.querySelector(".pnl");
+ p.className="pnl "+pnlCls;
+ p.textContent=(pnl>=0?"+":"")+fmt(pnl)+" ("+(pnlPct>=0?"+":"")+pnlPct.toFixed(2)+"%)";
+ draw(el.querySelector(".spark"),spark,pnlPct>=0);
+}
+function draw(svg,arr,up){
+ if(!arr||arr.length<2)return;
+ const mn=Math.min(...arr),mx=Math.max(...arr),d=mx-mn||1;
+ const pts=arr.map((v,i)=>`${i/(arr.length-1)*300},${40-(v-mn)/d*36}`).join(" ");
+ svg.innerHTML=`<polyline points="${pts}" fill="none" stroke="${up?'#35e75f':'#ff5151'}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>`;
+}
+async function binance(c){
+ const r=await fetch(`https://data-api.binance.vision/api/v3/ticker/24hr?symbol=${c.symbol}`,{cache:"no-store"});
+ if(!r.ok)throw Error("Binance "+r.status);
+ const x=await r.json();
+ return {price:+x.lastPrice,change:+x.priceChangePercent,spark:[]};
+}
+async function popcat(){
+ const url="https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids=popcat&price_change_percentage=24h&sparkline=true";
+ const r=await fetch(url,{cache:"no-store"});
+ if(!r.ok)throw Error("CoinGecko "+r.status);
+ const x=(await r.json())[0];
+ return {price:x.current_price,change:x.price_change_percentage_24h||0,spark:x.sparkline_in_7d?.price||[]};
+}
+async function update(){
+ let ok=0;
+ let attempted=0;
+ await Promise.all(coins.map(async c=>{
+  attempted++;
+  try{
+   const d=c.source==="binance"?await binance(c):await popcat();
+   setData(c,d.price,d.change,d.spark);
+   c.lastGood=Date.now();
+   c.hasData=true;
+   ok++;
+  }catch(e){
+   console.log(c.ticker,e);
+   // Keep the last successful price on screen rather than replacing it with dashes.
+  }
+ }));
+ const now=new Date();
+ const age=coins.filter(c=>c.hasData).map(c=>Date.now()-c.lastGood);
+ const stale=age.length?Math.floor(Math.max(...age)/1000):null;
+ if(ok===coins.length){
+   document.getElementById("status").innerHTML=`<b>● LIVE</b><br>${now.toLocaleTimeString([], {hour:"2-digit",minute:"2-digit",second:"2-digit"})}`;
+ }else if(coins.some(c=>c.hasData)){
+   document.getElementById("status").innerHTML=`<b>● LIVE</b><br>${ok}/${coins.length} refreshed • ${stale}s`;
+ }else{
+   document.getElementById("status").innerHTML=`<b style="color:#ffd23f">● CONNECTING</b><br>retrying…`;
+ }
+}
+update();setInterval(update,15000);
+</script>
+</body>
+</html>
